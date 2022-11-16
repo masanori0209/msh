@@ -1,0 +1,10 @@
+version: "3.8"
+services:
+  msh:
+    container_name: msh
+    build: ./msh
+    tty: true
+    volumes:
+      - ./msh:/work
+    ports:
+      - 8000:8000
