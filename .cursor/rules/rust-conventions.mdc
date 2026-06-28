@@ -1,0 +1,38 @@
+---
+globs: msh/src/**/*.rs
+alwaysApply: false
+---
+
+# Rust コード規約（msh）
+
+`msh/src/**/*.rs` を編集するときのルール。言語デフォルトと異なる点のみ記載。
+
+## エラー処理
+
+- エラー型は `crate::error::MshError` に集約。`?` で伝播する。
+- 新しい失敗ケースは `error.rs` に variant を追加する。
+- 外部クレート由来のエラーは `From` が無い場合があるため、`.map_err(|e| MshError::ScriptError(e.to_string()))` 等で明示変換する（例: `serde_json::Error`）。
+
+## 組み込みコマンドを追加するとき
+
+1. `msh/src/builtins/<name>.rs` を作成
+2. `msh/src/builtins/mod.rs` の `NAMES` 配列に登録
+3. `run()` の match に分岐を追加
+4. シェル状態が必要なら `needs_shell_context()` に追加し、`shell.rs` 側で処理
+5. `descriptions.rs` / `help.rs` の説明も更新
+
+## 設定項目を追加するとき
+
+`config.rs` の以下を**すべて**揃える:
+
+- `ShellConfig` のフィールド
+- `default_from_file()` の初期値
+- `apply_toml()` のキー処理
+- `describe_config()` の出力
+- `default_config_template()` のコメント例
+
+## その他
+
+- 新規モジュールは `lib.rs` に `pub mod` を追加。
+- コメントはコードの言い換えをしない。非自明な意図・制約のみ。
+- `shell.rs` は巨大なので、編集前に対象範囲を読む。

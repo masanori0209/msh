@@ -1,0 +1,29 @@
+---
+globs: msh/tests/**/*.rs,msh/benches/**/*.rs
+alwaysApply: false
+---
+
+# テスト・ベンチ規約（msh）
+
+## 統合テスト（`tests/`）
+
+- `tests/basic.rs` — 基本挙動（echo, cd, パイプ, リダイレクト等）。
+- `tests/compat.rs` — シェル互換性。`run_c("コマンド")` で実バイナリを `-c` 起動し、stdout と exit code を検証する。
+- 新しいシェル挙動を足したら compat に 1 ケース追加する。
+- **モックは使わない**。実バイナリ・tempfile・実ファイルシステムで検証する。
+- 期待値は exit code と stdout の両方を具体的にアサートする。
+
+```rust
+#[test]
+fn my_feature() {
+    let (stdout, code) = run_c("echo a && echo b");
+    assert_eq!(code, 0);
+    assert!(stdout.contains("a"));
+}
+```
+
+## ベンチ（`benches/`）
+
+- Criterion を使用。`cargo bench --bench shell_bench` で実行。
+- 性能に影響しうる変更後はベンチを回し、`docs/benchmarks.md` の数値を実測で更新する。
+- 数値の捏造禁止。必ず実行結果を記載する。

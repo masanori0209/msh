@@ -1,0 +1,32 @@
+---
+description: コミットメッセージ・PR・バージョニング・ブランチ運用のルール。コミットや PR を作成する前に参照する。
+alwaysApply: false
+---
+
+# Git / PR ワークフロー（msh）
+
+## コミット
+
+- **ユーザーが明示的に依頼したときのみ**コミットを作成する。勝手にコミットしない。
+- **Conventional Commits** を使う:
+  - `feat:` 新機能 / `fix:` バグ修正 / `perf:` 性能改善
+  - `docs:` ドキュメント / `test:` テスト / `bench:` ベンチ
+  - `refactor:` リファクタ / `chore:` 雑務
+- コミット前に `./scripts/check.sh` がパスしていること。
+- コミットメッセージ本文は日本語で「なぜ」を中心に書く。
+
+## バージョニング
+
+- バージョンは `msh/Cargo.toml` の `version` で管理（現行 v0.7.0）。
+- 機能追加時は [docs/roadmap.md](../../docs/roadmap.md) のマイルストーン表とチェックリストも更新する。
+
+## PR
+
+- PR を作成する前に検証ループが緑であることを確認。
+- 変更が性能・互換に関わる場合、ベンチ結果・compat テスト件数を本文に記載。
+
+## 触ってはいけないもの
+
+- `target/` `/tmp/target` などビルド成果物
+- `.env` 等の秘密情報
+- ユーザーデータ（`.msh_history`, `session.json`, `~/.config/msh/`）

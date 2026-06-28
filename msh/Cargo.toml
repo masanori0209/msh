@@ -1,8 +1,36 @@
 [package]
 name = "msh"
-version = "0.1.0"
-edition = "2018"
+version = "0.7.3"
+edition = "2021"
+
+[lib]
+name = "msh"
+path = "src/lib.rs"
+
+[[bin]]
+name = "msh"
+path = "src/main.rs"
 
 [dependencies]
-whoami = "1.1.3"
-colored = "2"
+ctrlc = "3"
+nix = { version = "0.29", features = ["signal"] }
+rustyline = { version = "15", default-features = false, features = [
+    "with-file-history",
+] }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "shell_bench"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.bench]
+inherits = "release"

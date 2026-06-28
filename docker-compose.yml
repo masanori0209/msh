@@ -1,4 +1,3 @@
-version: "3.8"
 services:
   msh:
     container_name: msh
@@ -6,5 +5,3 @@ services:
     tty: true
     volumes:
       - ./msh:/work
-    ports:
-      - 8000:8000

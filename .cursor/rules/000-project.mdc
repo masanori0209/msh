@@ -1,0 +1,20 @@
+---
+alwaysApply: true
+---
+
+# msh プロジェクト基本
+
+Rust 製の対話型シェル。速度・省メモリ・GUI 的 CUI 体験を目指す。詳細な規約は [AGENTS.md](../../AGENTS.md) を参照。
+
+## 必須ルール
+
+- 応答は**日本語**。
+- 編集後は `./scripts/check.sh`（fmt + clippy + test）を回し、**緑になるまで自走**する。
+- clippy は `-D warnings`。警告ゼロが必須。
+- コミットは**ユーザーが明示依頼したときのみ**。
+- 計測値（RSS・ベンチ・テスト件数）は推測で書かず、実コマンドで裏取りする。
+
+## 作業の基点
+
+- crate は `msh/`。`cargo` コマンドは `msh/` 基準で実行。
+- ローカル `cargo` が最も安定（Docker は rustc 1.85 で home crate 問題あり）。ただし Docker Compose 利用が望ましい場面では `docker compose exec msh cargo ...`。

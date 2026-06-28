@@ -1,0 +1,47 @@
+---
+description: 編集→検証→修正を緑になるまで自走するループエンジニアリングの手順。複数ステップのタスクや実装作業の進め方。
+alwaysApply: false
+---
+
+# ループエンジニアリング（自己検証ループ）
+
+エージェントは推測で終わらせず、**機械的に検証可能なゲートが緑になるまで自走**する。
+
+## 基本ループ
+
+```
+1. 計画   — 複数ステップなら TodoWrite でタスク分解
+2. 編集   — 1 つの関心事に絞って変更
+3. 検証   — ./scripts/check.sh を実行（fmt + clippy + test）
+4. 判定   — 緑 → 次へ / 赤 → 原因特定して修正し 3 に戻る
+5. 記録   — 挙動が変わったらテスト追加、文書を実態に更新
+```
+
+## 検証ゲート（必ずパスさせる）
+
+```bash
+./scripts/check.sh         # fmt --check + clippy -D warnings + test を一括
+```
+
+個別に切り分けたいとき:
+
+```bash
+cd msh
+cargo fmt                  # まず整形
+cargo clippy -- -D warnings
+cargo test
+cargo test <name>          # 失敗テストだけ高速に回す
+```
+
+## 性能・互換に触れたとき
+
+- ベンチ回帰確認: `cd msh && cargo bench --bench shell_bench`
+- 互換確認: `cargo test --test compat`
+- 結果を `docs/benchmarks.md` / `docs/positioning-report.md` に**実測で**反映（捏造禁止）。
+
+## 自走の原則
+
+- テストが赤のまま「たぶん直った」で終わらない。緑を確認するまで続ける。
+- 同じ失敗を 2 回繰り返したら、原因の仮説を変える（ログ追加・最小再現）。
+- 不可逆・破壊的操作（force push、履歴改変、大量削除）はユーザー確認を取る。
+- スコープが広がる・設計判断が必要な場合はユーザーに相談する。

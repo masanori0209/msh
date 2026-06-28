@@ -1,4 +1,4 @@
-FROM rust:1.60
+FROM rust:1.85
 
 ENV CARGO_TARGET_DIR=/tmp/target \
   DEBIAN_FRONTEND=noninteractive \

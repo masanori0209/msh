@@ -1,1 +1,23 @@
+# Rust ビルド成果物
+/target
+/msh/target
+**/*.rs.bk
+*.pdb
+
+# Criterion ベンチ出力
+/msh/target/criterion
+
+# OS / エディタ
 .DS_Store
+*.swp
+*~
+
+# msh ユーザーデータ（テスト・ローカル実行で生成）
+.msh_history
+session.json
+session.state
+
+# 環境・秘密情報
+.env
+.env.*
+!.env.example
