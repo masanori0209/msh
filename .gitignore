@@ -12,6 +12,13 @@
 *.swp
 *~
 
+# シェルリダイレクトの誤生成物（例: `echo x >&1` の typo）
+&1
+&2
+
+# Cursor ローカル MCP 設定（`.cursor/mcp.json.example` はトラッキング）
+.cursor/mcp.json
+
 # msh ユーザーデータ（テスト・ローカル実行で生成）
 .msh_history
 session.json
