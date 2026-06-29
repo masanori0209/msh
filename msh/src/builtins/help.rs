@@ -14,7 +14,7 @@ const TOPICS: &[(&str, &str)] = &[
     ),
     (
         "prompt",
-        "configure prompt interactively: prompt config | prompt preview",
+        "configure prompt: guided `prompt config` | `prompt wizard` | `prompt preview`",
     ),
     ("exit", "exit shell: exit [code]"),
     ("help", "show help: help [topic]"),

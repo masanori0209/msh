@@ -22,7 +22,11 @@ pub fn maybe_show(config_dir: &PathBuf, language: Language) {
     );
     println!(
         "  prompt config  {}",
-        msg(language, "プロンプト設定", "prompt setup")
+        msg(
+            language,
+            "プロンプト設定（8 ステップ）",
+            "prompt setup (8 steps)"
+        )
     );
     println!();
     println!("{}", section_agent(language));

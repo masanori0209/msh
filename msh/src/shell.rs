@@ -1326,7 +1326,7 @@ cause of failure and how to fix it. Be brief and practical.";
         Ok(())
     }
 
-    /// `prompt` / `prompt config` — 対話式プロンプト設定。`prompt preview` で現在の見た目を表示。
+    /// `prompt` / `prompt config|wizard` — 対話式プロンプト設定。`prompt preview` で現在の見た目を表示。
     fn run_prompt(&mut self, args: Vec<String>) -> Result<(), MshError> {
         match args.first().map(String::as_str) {
             Some("preview") => {
@@ -1339,13 +1339,13 @@ cause of failure and how to fix it. Be brief and practical.";
                 });
                 println!("{line}");
             }
-            Some("config") | None => {
+            Some("config") | Some("wizard") | None => {
                 let lang = self.config.language;
                 crate::prompt_setup::run(&mut self.config, &mut self.prompt_cache, lang)?;
             }
             Some(other) => {
                 return Err(MshError::ScriptError(format!(
-                    "prompt: unknown subcommand '{other}' (try: prompt config, prompt preview)"
+                    "prompt: unknown subcommand '{other}' (try: prompt config, prompt wizard, prompt preview)"
                 )));
             }
         }
