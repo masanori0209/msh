@@ -1,0 +1,13 @@
+name = "hello"
+description = "PoC greet export for msh WASM plugins"
+wasm = "hello.wasm"
+
+# Build (requires wat2wasm from wabt):
+#   wat2wasm hello.wat -o hello.wasm
+#
+# Install to user plugins dir:
+#   mkdir -p ~/.config/msh/plugins/hello
+#   cp plugin.toml hello.wasm ~/.config/msh/plugins/hello/
+#
+# Run:
+#   msh -c 'plugin run hello greet'

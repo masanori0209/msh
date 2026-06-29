@@ -356,7 +356,7 @@ checksum = "88904434abc2901f197fe8cc55f0445e7ded921dba5911dad2e2b39b48e663c4"
 
 [[package]]
 name = "msh"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "criterion",
  "ctrlc",

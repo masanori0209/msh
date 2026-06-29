@@ -10,6 +10,7 @@ use crate::parse::{self, Arg, ChainOp, ParsedLine, ParsedScript};
 use crate::prompt;
 use crate::script::{self, PendingBlock, Stmt};
 use crate::session::{self, SessionState};
+use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::env;
@@ -93,6 +94,71 @@ impl Shell {
         self.load_startup_files(false);
     }
 
+    /// エージェント向け起動（rc 戦略・セッション復元・sandbox env）。
+    pub fn init_for_agent(&mut self) {
+        match self.config.agent.rc_mode {
+            crate::config::AgentRcMode::Skip => {}
+            crate::config::AgentRcMode::Minimal => self.load_msh_env_only(),
+            crate::config::AgentRcMode::Full => self.load_startup_files(false),
+        }
+        self.restore_agent_session();
+        if let Some(root) = &self.config.agent.sandbox_root {
+            if !root.is_empty() {
+                std::env::set_var("MSH_AGENT_SANDBOX", root);
+                if let Err(e) = crate::agent::verify_cwd_in_sandbox(root) {
+                    line_editor::report_error(&e, self.config.language);
+                }
+            }
+        }
+    }
+
+    pub fn finalize_agent_session(&mut self) {
+        if let Some(root) = &self.config.agent.sandbox_root {
+            if !root.is_empty() {
+                if let Err(e) = crate::agent::verify_cwd_in_sandbox(root) {
+                    line_editor::report_error(&e, self.config.language);
+                }
+            }
+        }
+        self.save_agent_session();
+    }
+
+    fn load_msh_env_only(&mut self) {
+        if let Ok(home) = std::env::var("HOME") {
+            let path = PathBuf::from(home).join(".msh_env");
+            if path.is_file() {
+                if let Err(e) = self.load_file(&path) {
+                    line_editor::report_error(&e, self.config.language);
+                }
+            }
+        }
+    }
+
+    fn restore_agent_session(&mut self) {
+        let Some(path) = self.config.agent.session_path.clone() else {
+            return;
+        };
+        if let Err(e) = self.restore_agent_session_from(&path) {
+            line_editor::report_error(&e, self.config.language);
+        }
+    }
+
+    fn save_agent_session(&self) {
+        let Some(path) = self.config.agent.session_path.clone() else {
+            return;
+        };
+        let _ = session::save(&self.session_state(), Path::new(&path));
+    }
+
+    fn restore_agent_session_from(&mut self, path: &str) -> Result<(), MshError> {
+        let Some(state) = session::load(Path::new(path))? else {
+            return Ok(());
+        };
+        session::restore(&state)?;
+        self.dir_stack = state.dir_stack;
+        Ok(())
+    }
+
     fn load_startup_files(&mut self, restore_session: bool) {
         if env::var("MSH_SKIP_RC").is_err() {
             if let Err(e) = self.load_rc() {
@@ -108,7 +174,7 @@ impl Shell {
 
     pub fn init_interactive(&mut self) {
         if let Some(config_dir) = ShellConfig::config_dir() {
-            onboarding::maybe_show(&config_dir);
+            onboarding::maybe_show(&config_dir, self.config.language);
         }
         self.init();
         if let Err(e) = self.maybe_init_atuin() {
@@ -131,8 +197,13 @@ impl Shell {
 
     fn run_plain(&mut self) -> i32 {
         loop {
-            let prompt =
-                prompt::render(self.last_status, &mut self.prompt_cache, self.config.theme);
+            let prompt = prompt::render(prompt::RenderContext {
+                last_status: self.last_status,
+                last_duration: self.last_duration,
+                cache: &mut self.prompt_cache,
+                settings: &self.config.prompt,
+                theme: self.config.theme,
+            });
             let line = match line_editor::read_plain_line(&prompt) {
                 Ok(Some(line)) => line,
                 Ok(None) => {
@@ -168,8 +239,13 @@ impl Shell {
                 self.alias_fingerprint = fingerprint;
             }
 
-            let prompt =
-                prompt::render(self.last_status, &mut self.prompt_cache, self.config.theme);
+            let prompt = prompt::render(prompt::RenderContext {
+                last_status: self.last_status,
+                last_duration: self.last_duration,
+                cache: &mut self.prompt_cache,
+                settings: &self.config.prompt,
+                theme: self.config.theme,
+            });
             let prefill = self.take_prefill();
             let read = match prefill {
                 Some(initial) => editor.read_line_with_initial(&prompt, &initial),
@@ -225,7 +301,7 @@ impl Shell {
         let line = line.trim();
         if line.is_empty() {
             if interactive {
-                onboarding::quick_tip();
+                onboarding::quick_tip(self.config.language);
             }
             return Ok(BuiltinAction::Continue);
         }
@@ -242,7 +318,7 @@ impl Shell {
         // 直前コマンドとして記録（explain / ai 自身は除外し、参照対象を保つ）。
         if interactive {
             let head = line.split_whitespace().next().unwrap_or("");
-            if !matches!(head, "explain" | "ai") {
+            if !matches!(head, "explain" | "ai" | "prompt") {
                 self.last_command = line.to_string();
             }
         }
@@ -617,28 +693,109 @@ impl Shell {
     }
 
     /// `--json -c` 用。コマンドを実行し stdout/stderr を捕捉して JSON 1 行で出力する。
-    /// AI エージェントが結果を機械的に扱えるようにするための構造化出力（B-1）。
-    /// 戻り値は終了コード。
     pub fn run_command_json(&mut self, command: &str) -> i32 {
+        let (exit_code, json) = self.build_command_json(command);
+        println!("{json}");
+        self.finalize_agent_session();
+        exit_code
+    }
+
+    /// JSON 1 行を組み立てる（`--json` / `--agent` / MCP 共用）。
+    pub fn build_command_json(&mut self, command: &str) -> (i32, String) {
         let started = Instant::now();
         let (exit_code, stdout, stderr, error) = match self.capture_command(command) {
             Ok((code, out, err)) => (code, out, err, None),
-            Err(e) => (1, String::new(), String::new(), Some(e.to_string())),
+            Err(e) => (1, String::new(), String::new(), Some(e)),
         };
         let duration_ms = started.elapsed().as_millis();
+        let opts = self.json_output_options();
+        let json =
+            crate::command_json::build_command_json(&crate::command_json::CommandJsonInput {
+                command,
+                exit_code,
+                duration_ms,
+                stdout: &stdout,
+                stderr: &stderr,
+                error: error.as_ref(),
+                opts,
+                extra_fields: String::new(),
+            });
+        (exit_code, json)
+    }
 
-        let mut json = String::with_capacity(256);
-        json.push('{');
-        json.push_str(&format!("\"command\":\"{}\",", json_escape(command)));
-        json.push_str(&format!("\"exit_code\":{exit_code},"));
-        json.push_str(&format!("\"duration_ms\":{duration_ms},"));
-        json.push_str(&format!("\"stdout\":\"{}\",", json_escape(&stdout)));
-        json.push_str(&format!("\"stderr\":\"{}\"", json_escape(&stderr)));
-        if let Some(err) = error {
-            json.push_str(&format!(",\"error\":\"{}\"", json_escape(&err)));
+    fn json_output_options(&self) -> crate::command_json::JsonOutputOptions {
+        crate::command_json::JsonOutputOptions {
+            max_bytes: self.config.agent.json_max_bytes,
+            include_meta: self.config.agent.include_meta,
         }
-        json.push('}');
+    }
+
+    /// `--agent --json -c` 用。agent フィールド付き JSON を返す。
+    pub fn run_command_agent_json(
+        &mut self,
+        command: &str,
+        opts: crate::agent::AgentOptions,
+    ) -> i32 {
+        let settings = self.config.agent.clone();
+        let force = opts.force || std::env::var("MSH_AGENT_FORCE").is_ok();
+        let opts = crate::agent::AgentOptions {
+            force,
+            dry_run: opts.dry_run,
+        };
+        let assessment = crate::agent::assess(command);
+
+        if opts.dry_run {
+            let _ = crate::agent::write_audit(
+                &settings,
+                &crate::agent::AuditEntry {
+                    command: command.to_string(),
+                    action: "dry_run",
+                    risk: assessment.risk,
+                    exit_code: None,
+                    reason: Some(assessment.reason.clone()),
+                },
+            );
+            let json = crate::command_json::build_agent_dry_run_json(command, &assessment);
+            println!("{json}");
+            return 0;
+        }
+
+        if let Err(e) = crate::agent::gate(command, opts, &settings) {
+            let _ = crate::agent::write_audit(
+                &settings,
+                &crate::agent::AuditEntry {
+                    command: command.to_string(),
+                    action: "blocked",
+                    risk: assessment.risk,
+                    exit_code: Some(1),
+                    reason: Some(e.to_string()),
+                },
+            );
+            let json = crate::command_json::build_blocked_json(&e, Some(&assessment));
+            println!("{json}");
+            return 1;
+        }
+
+        let (exit_code, mut json) = self.build_command_json(command);
+        if json.ends_with('}') {
+            json.truncate(json.len() - 1);
+            json.push_str(&format!(
+                ",\"action\":\"executed\",\"risk\":\"{}\"}}",
+                crate::agent::risk_label(assessment.risk)
+            ));
+        }
+        let _ = crate::agent::write_audit(
+            &settings,
+            &crate::agent::AuditEntry {
+                command: command.to_string(),
+                action: "executed",
+                risk: assessment.risk,
+                exit_code: Some(exit_code),
+                reason: None,
+            },
+        );
         println!("{json}");
+        self.finalize_agent_session();
         exit_code
     }
 
@@ -662,6 +819,26 @@ impl Shell {
         let (status, output) = self.eval_capture(command)?;
         self.last_status = status;
         Ok(output)
+    }
+
+    /// プロセス置換 `<(cmd)` / `>(cmd)` をファイルパスに展開する。
+    fn eval_process_subst(&mut self, ps: &ProcessSubstitution) -> Result<String, MshError> {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        match ps.mode {
+            ProcessSubstMode::Input => {
+                let output = self.eval_subshell(&ps.body)?;
+                static PS_SEQ: AtomicU64 = AtomicU64::new(0);
+                let seq = PS_SEQ.fetch_add(1, Ordering::Relaxed);
+                let path = env::temp_dir().join(format!("msh-ps-{}-{seq}.out", std::process::id()));
+                std::fs::write(&path, output).map_err(MshError::Io)?;
+                Ok(path.to_string_lossy().into_owned())
+            }
+            ProcessSubstMode::Output => Err(MshError::UnsupportedSyntax {
+                feature: "process substitution >( )".into(),
+                workaround: "use bash -c 'your command' or a named pipe".into(),
+            }),
+        }
     }
 
     fn eval_capture(&mut self, command: &str) -> Result<(i32, String), MshError> {
@@ -778,26 +955,40 @@ impl Shell {
             }
         }
 
+        let pending = RefCell::new(Vec::new());
         let ctx = ExpandContext {
             last_status: self.last_status,
             shell_vars: self.current_scope(),
             arrays: self.current_arrays(),
             assoc: self.current_assoc(),
             nounset: self.nounset,
+            pending_assigns: Some(&pending),
         };
-        exec::expand_pipeline_with(&parsed, &ctx)
+        let parsed = exec::expand_pipeline_with(&parsed, &ctx)?;
+        self.apply_pending_assigns(pending.into_inner());
+        Ok(parsed)
+    }
+
+    fn apply_pending_assigns(&mut self, pending: Vec<(String, String)>) {
+        for (key, value) in pending {
+            self.set_var(&key, value);
+        }
     }
 
     fn expand_word_list(&mut self, word: &str) -> Result<Vec<String>, MshError> {
         let expanded = self.expand_substitutions(word)?;
+        let pending = RefCell::new(Vec::new());
         let ctx = ExpandContext {
             last_status: self.last_status,
             shell_vars: self.current_scope(),
             arrays: self.current_arrays(),
             assoc: self.current_assoc(),
             nounset: self.nounset,
+            pending_assigns: Some(&pending),
         };
-        expand::expand_word_with(&expanded, &ctx)
+        let words = expand::expand_word_with(&expanded, &ctx)?;
+        self.apply_pending_assigns(pending.into_inner());
+        Ok(words)
     }
 
     fn expand_words(&mut self, words: &[String]) -> Result<Vec<String>, MshError> {
@@ -811,6 +1002,11 @@ impl Shell {
     fn expand_substitutions(&mut self, input: &str) -> Result<String, MshError> {
         let mut current = input.to_string();
         for _ in 0..64 {
+            if let Some(ps) = find_process_substitution(&current) {
+                let path = self.eval_process_subst(&ps)?;
+                current.replace_range(ps.range, &path);
+                continue;
+            }
             if let Some(subst) = find_command_substitution(&current) {
                 let replacement = self.eval_subshell(&subst.body)?;
                 // POSIX: コマンド置換は末尾の改行をすべて除去する。
@@ -1071,6 +1267,10 @@ impl Shell {
                 self.run_explain(args)?;
                 Ok(BuiltinAction::Continue)
             }
+            "prompt" => {
+                self.run_prompt(args)?;
+                Ok(BuiltinAction::Continue)
+            }
             _ => builtins::run(program, &args),
         }
     }
@@ -1126,7 +1326,32 @@ cause of failure and how to fix it. Be brief and practical.";
         Ok(())
     }
 
-    /// `# 自然文` を AI に渡してコマンド案を取得し、次プロンプトへ事前挿入する。
+    /// `prompt` / `prompt config` — 対話式プロンプト設定。`prompt preview` で現在の見た目を表示。
+    fn run_prompt(&mut self, args: Vec<String>) -> Result<(), MshError> {
+        match args.first().map(String::as_str) {
+            Some("preview") => {
+                let line = prompt::render(prompt::RenderContext {
+                    last_status: self.last_status,
+                    last_duration: self.last_duration,
+                    cache: &mut self.prompt_cache,
+                    settings: &self.config.prompt,
+                    theme: self.config.theme,
+                });
+                println!("{line}");
+            }
+            Some("config") | None => {
+                let lang = self.config.language;
+                crate::prompt_setup::run(&mut self.config, &mut self.prompt_cache, lang)?;
+            }
+            Some(other) => {
+                return Err(MshError::ScriptError(format!(
+                    "prompt: unknown subcommand '{other}' (try: prompt config, prompt preview)"
+                )));
+            }
+        }
+        Ok(())
+    }
+
     fn suggest_from_comment(&mut self, request: &str) -> Result<(), MshError> {
         let system = "You translate a natural-language request into a single Unix shell command \
 for the msh shell. Output ONLY the command on one line, with no explanation, no markdown, \
@@ -1354,6 +1579,53 @@ struct CommandSubstitution {
     body: String,
 }
 
+enum ProcessSubstMode {
+    Input,
+    Output,
+}
+
+struct ProcessSubstitution {
+    range: std::ops::Range<usize>,
+    body: String,
+    mode: ProcessSubstMode,
+}
+
+fn find_process_substitution(input: &str) -> Option<ProcessSubstitution> {
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i + 1 < bytes.len() {
+        if (bytes[i] == b'<' || bytes[i] == b'>') && bytes[i + 1] == b'(' {
+            let mode = if bytes[i] == b'<' {
+                ProcessSubstMode::Input
+            } else {
+                ProcessSubstMode::Output
+            };
+            let mut depth = 1;
+            let mut j = i + 2;
+            while j < bytes.len() {
+                match bytes[j] {
+                    b'(' => depth += 1,
+                    b')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            return Some(ProcessSubstitution {
+                                range: i..j + 1,
+                                body: input[i + 2..j].to_string(),
+                                mode,
+                            });
+                        }
+                    }
+                    _ => {}
+                }
+                j += 1;
+            }
+            return None;
+        }
+        i += 1;
+    }
+    None
+}
+
 fn find_command_substitution(input: &str) -> Option<CommandSubstitution> {
     let bytes = input.as_bytes();
     let mut i = 0;
@@ -1439,23 +1711,6 @@ fn tokenize_alias(input: &str) -> Vec<String> {
     }
 
     tokens
-}
-
-/// JSON 文字列リテラル用にエスケープする（依存を増やさない最小実装）。
-fn json_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    for ch in s.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out
 }
 
 /// AI が返したコマンド案から、コードフェンスや前置きを除いて 1 行に正規化する。

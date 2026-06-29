@@ -360,6 +360,7 @@ pub fn expand_command(command: &CommandSpec) -> Result<CommandSpec> {
         arrays: &empty_arrays,
         assoc: &empty_assoc,
         nounset: false,
+        pending_assigns: None,
     };
     expand_command_with(command, &ctx)
 }
@@ -390,6 +391,7 @@ pub fn expand_pipeline(parsed: &ParsedLine) -> Result<ParsedLine> {
         arrays: &empty_arrays,
         assoc: &empty_assoc,
         nounset: false,
+        pending_assigns: None,
     };
     expand_pipeline_with(parsed, &ctx)
 }

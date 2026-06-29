@@ -62,7 +62,7 @@ load_zshrc = false
 | 機能 | 設定 |
 |---|---|
 | ファジー補完 | `fuzzy_completion = true` |
-| 日本語エラー | `language = "ja"` または `MSH_LANG=ja` |
+| 日本語エラー | `$LANG=ja_JP.UTF-8` 等で自動推論、`language = "ja"` または `MSH_LANG=ja` で明示 |
 | テーマ | `theme = "default"` / `"minimal"` |
 | プラグイン | `~/.config/msh/plugins/*.msh` |
 | ヘルプ | `help` / 空 Enter |

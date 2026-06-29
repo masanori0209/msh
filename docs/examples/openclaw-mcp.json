@@ -1,0 +1,21 @@
+{
+  "mcp": {
+    "servers": {
+      "msh": {
+        "command": "/usr/local/bin/msh",
+        "args": ["--mcp"],
+        "env": {
+          "MSH_SKIP_RC": "1"
+        },
+        "enabled": true
+      }
+    }
+  },
+  "tools": {
+    "sandbox": {
+      "tools": {
+        "alsoAllow": ["bundle-mcp"]
+      }
+    }
+  }
+}

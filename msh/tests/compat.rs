@@ -93,6 +93,20 @@ fn exit_without_arg_uses_last_status() {
 }
 
 #[test]
+fn process_substitution_input() {
+    let (stdout, code) = run_c("cat <(echo proc)");
+    assert_eq!(code, 0);
+    assert!(stdout.contains("proc"), "got: {stdout}");
+}
+
+#[test]
+fn param_assign_default_persists() {
+    let (stdout, code) = run_c(": ${z:=persist}; echo $z");
+    assert_eq!(code, 0);
+    assert_eq!(stdout.trim(), "persist");
+}
+
+#[test]
 fn export_with_expansion() {
     let (stdout, code) = run_c("export MSH_COMPAT_TEST=hello; echo $MSH_COMPAT_TEST");
     assert_eq!(code, 0);

@@ -1,6 +1,8 @@
 # msh AI 連携設計
 
-> 最終更新: 2026-06-29 / 対象バージョン: v0.7.3+（A-1 基盤・A-2・B-1 実装、ローカル/他 LLM 対応）
+> 最終更新: 2026-06-29 / 対象バージョン: v0.7.4（A-1/A-2/B-1/B-2/B-3 PoC 実装）  
+> **カテゴリ整理・エージェント統合設計**: [agent-shell-positioning.md](./agent-shell-positioning.md)  
+> **製品別設定例（Cursor / Claude Code / Codex / OpenClaw）**: [agent-integration.md](./agent-integration.md)
 
 bash/zsh/fish が持たない **ネイティブ AI 連携**を、msh の核（軽量・低依存・安全）を壊さずに実現するための設計と段階計画。
 
@@ -126,8 +128,17 @@ AI エージェントは `--json` で stdout/stderr/exit_code/duration_ms/comman
 | フェーズ | 内容 | 状態 |
 |---|---|---|
 | **B-1** | 構造化出力 `msh --json -c '...'`（stdout/stderr/exit_code/duration_ms/command を 1 行 JSON） | ✅ 実装済み |
-| B-2 | エージェント安全実行 `msh --agent`（破壊的コマンド検知・ドライラン・確認フック・構造化ログ） | 計画 |
-| B-3 | MCP サーバ公開（Claude/Cursor から安全に shell を回す標準口） | 構想 |
+| B-2 | エージェント安全実行 `msh --agent`（破壊的コマンド検知・ドライラン・`--agent-force`・構造化ログ） | ✅ 実装済み |
+| B-3 | MCP サーバ公開（`msh --mcp` — stdio JSON-RPC・`msh_run` ツール） | ✅ PoC |
+
+### B-2 / B-3 クイックリファレンス
+
+```bash
+msh --agent -c 'echo hi'                     # 実行 + JSON（action/risk）
+msh --agent --agent-dry-run -c 'rm file'     # 分類のみ
+msh --agent --agent-force -c 'rm -rf /tmp/x' # Destructive 強制
+msh --mcp                                    # stdio MCP（tools/call → msh_run）
+```
 
 ---
 

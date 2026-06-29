@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "msh": {
+      "command": "${workspaceFolder}/scripts/msh-mcp.sh",
+      "args": [],
+      "env": {
+        "MSH_SKIP_RC": "1"
+      }
+    }
+  }
+}

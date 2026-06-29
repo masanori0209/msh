@@ -12,6 +12,10 @@ const TOPICS: &[(&str, &str)] = &[
         "history",
         "show or filter history: history [-n count] [-g pattern]",
     ),
+    (
+        "prompt",
+        "configure prompt interactively: prompt config | prompt preview",
+    ),
     ("exit", "exit shell: exit [code]"),
     ("help", "show help: help [topic]"),
 ];

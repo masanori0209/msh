@@ -7,7 +7,7 @@
 
 - **言語/エディション**: Rust (edition 2021)、ツールチェイン stable
 - **crate**: `msh/`（lib `msh` + bin `msh`）
-- **現行バージョン**: v0.7.2（Phase 6 進行中、L5 連想配列・省メモリ化済）
+- **現行バージョン**: v0.7.4（Phase 6 進行中、互換 100%・WASM PoC・`--agent`/`--mcp`）
 - **設計ドキュメント**: [docs/roadmap.md](./docs/roadmap.md) / [docs/compatibility.md](./docs/compatibility.md) / [docs/positioning-report.md](./docs/positioning-report.md)
 
 ## ディレクトリ構成

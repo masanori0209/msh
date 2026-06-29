@@ -1,4 +1,5 @@
 use crate::error::{MshError, Result};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::fs;
@@ -13,6 +14,8 @@ pub struct ExpandContext<'a> {
     pub arrays: &'a HashMap<String, Vec<String>>,
     pub assoc: &'a AssocArrays,
     pub nounset: bool,
+    /// `${var:=word}` 等の永続代入をここに溜め、展開後に shell が scope へ反映する。
+    pub pending_assigns: Option<&'a RefCell<Vec<(String, String)>>>,
 }
 
 pub fn expand_word(word: &str) -> Result<Vec<String>> {
@@ -25,6 +28,7 @@ pub fn expand_word(word: &str) -> Result<Vec<String>> {
         arrays: &empty_arrays,
         assoc: &empty_assoc,
         nounset: false,
+        pending_assigns: None,
     };
     expand_word_with(word, &ctx)
 }
@@ -51,6 +55,7 @@ pub fn expand_vars_with(
         arrays,
         assoc: &empty_assoc,
         nounset: false,
+        pending_assigns: None,
     };
     expand_all(input, &ctx).unwrap_or_else(|_| input.to_string())
 }
@@ -228,6 +233,9 @@ fn resolve_value_opt(reference: &str, ctx: &ExpandContext<'_>) -> Option<String>
     if let Some(value) = ctx.shell_vars.get(reference) {
         return Some(value.clone());
     }
+    if let Some(value) = pending_value(reference, ctx) {
+        return Some(value);
+    }
     env::var(reference).ok()
 }
 
@@ -254,8 +262,8 @@ fn apply_param_op(name: &str, op: &str, ctx: &ExpandContext<'_>) -> Result<Strin
     // `:` 付きは「未設定または空」、`:` なしは「未設定」のみを対象とする。
     if let Some(after) = op.strip_prefix(':') {
         match after.chars().next() {
-            Some('-') => return default_value(&current, true, &after[1..], ctx),
-            Some('=') => return default_value(&current, true, &after[1..], ctx),
+            Some('-') => return default_value(name, &current, true, &after[1..], false, ctx),
+            Some('=') => return default_value(name, &current, true, &after[1..], true, ctx),
             Some('?') => return error_if_unset(name, &current, true, &after[1..], ctx),
             Some('+') => return alternate_value(&current, true, &after[1..], ctx),
             _ => return substring(&current.unwrap_or_default(), after, ctx),
@@ -265,8 +273,8 @@ fn apply_param_op(name: &str, op: &str, ctx: &ExpandContext<'_>) -> Result<Strin
     let first = op.as_bytes()[0];
     let rest = &op[1..];
     match first {
-        b'-' => default_value(&current, false, rest, ctx),
-        b'=' => default_value(&current, false, rest, ctx),
+        b'-' => default_value(name, &current, false, rest, false, ctx),
+        b'=' => default_value(name, &current, false, rest, true, ctx),
         b'?' => error_if_unset(name, &current, false, rest, ctx),
         b'+' => alternate_value(&current, false, rest, ctx),
         b'#' => {
@@ -302,15 +310,23 @@ fn is_active(current: &Option<String>, colon: bool) -> bool {
 }
 
 fn default_value(
+    name: &str,
     current: &Option<String>,
     colon: bool,
     word: &str,
+    assign: bool,
     ctx: &ExpandContext<'_>,
 ) -> Result<String> {
     if is_active(current, colon) {
         Ok(current.clone().unwrap_or_default())
     } else {
-        expand_all(word, ctx)
+        let value = expand_all(word, ctx)?;
+        if assign {
+            if let Some(pending) = ctx.pending_assigns {
+                pending.borrow_mut().push((name.to_string(), value.clone()));
+            }
+        }
+        Ok(value)
     }
 }
 
@@ -464,9 +480,23 @@ fn split_array_ref(reference: &str) -> Option<(&str, &str)> {
     Some((name, reference[open + 1..close].trim()))
 }
 
+fn pending_value(name: &str, ctx: &ExpandContext<'_>) -> Option<String> {
+    ctx.pending_assigns.as_ref().and_then(|pending| {
+        pending
+            .borrow()
+            .iter()
+            .rev()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.clone())
+    })
+}
+
 fn lookup_var(name: &str, ctx: &ExpandContext<'_>) -> Result<String> {
     if let Some(value) = ctx.shell_vars.get(name) {
         return Ok(value.clone());
+    }
+    if let Some(value) = pending_value(name, ctx) {
+        return Ok(value);
     }
     if let Ok(value) = env::var(name) {
         return Ok(value);
@@ -886,6 +916,7 @@ mod tests {
             arrays: &HashMap::new(),
             assoc: &HashMap::new(),
             nounset: false,
+            pending_assigns: None,
         };
         assert_eq!(eval_arith("1 + 2 * 3", &ctx).unwrap(), 7);
         assert_eq!(eval_arith("(1 + 2) * 3", &ctx).unwrap(), 9);
@@ -903,6 +934,7 @@ mod tests {
             arrays: &HashMap::new(),
             assoc: &HashMap::new(),
             nounset: false,
+            pending_assigns: None,
         };
         assert_eq!(eval_arith("i + 1", &ctx).unwrap(), 6);
         assert_eq!(eval_arith("$i * 2", &ctx).unwrap(), 10);
@@ -918,6 +950,7 @@ mod tests {
             arrays: &arrays,
             assoc: &HashMap::new(),
             nounset: false,
+            pending_assigns: None,
         };
         assert_eq!(expand_all("${arr[1]}", &ctx).unwrap(), "y");
         assert_eq!(expand_all("${arr[@]}", &ctx).unwrap(), "x y");
@@ -938,6 +971,7 @@ mod tests {
             arrays: &HashMap::new(),
             assoc: &assoc,
             nounset: false,
+            pending_assigns: None,
         };
         assert_eq!(expand_all("${cfg[name]}", &ctx).unwrap(), "msh");
         assert_eq!(expand_all("${cfg[missing]}", &ctx).unwrap(), "");
@@ -954,6 +988,21 @@ mod tests {
             arrays: Box::leak(Box::new(HashMap::new())),
             assoc: Box::leak(Box::new(AssocArrays::new())),
             nounset: false,
+            pending_assigns: None,
+        }
+    }
+
+    fn ctx_with_assign<'a>(
+        vars: &'a HashMap<String, String>,
+        pending: &'a RefCell<Vec<(String, String)>>,
+    ) -> ExpandContext<'a> {
+        ExpandContext {
+            last_status: 0,
+            shell_vars: vars,
+            arrays: Box::leak(Box::new(HashMap::new())),
+            assoc: Box::leak(Box::new(AssocArrays::new())),
+            nounset: false,
+            pending_assigns: Some(pending),
         }
     }
 
@@ -969,6 +1018,20 @@ mod tests {
         assert_eq!(expand_all("${empty-d}", &ctx).unwrap(), "");
         assert_eq!(expand_all("${set:+alt}", &ctx).unwrap(), "alt");
         assert_eq!(expand_all("${unset:+alt}", &ctx).unwrap(), "");
+    }
+
+    #[test]
+    fn param_assign_default_persists_via_pending() {
+        let vars = HashMap::new();
+        let pending_cell = RefCell::new(Vec::new());
+        let ctx = ctx_with_assign(&vars, &pending_cell);
+        assert_eq!(expand_all("${x:=assigned}", &ctx).unwrap(), "assigned");
+        let pending = pending_cell.into_inner();
+        assert_eq!(pending, vec![("x".to_string(), "assigned".to_string())]);
+        let pending_cell = RefCell::new(pending);
+        let ctx = ctx_with_assign(&vars, &pending_cell);
+        assert_eq!(expand_all("${x:=other}", &ctx).unwrap(), "assigned");
+        assert_eq!(pending_cell.into_inner().len(), 1);
     }
 
     #[test]

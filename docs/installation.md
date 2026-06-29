@@ -1,8 +1,18 @@
 # msh インストール
 
-> バージョン: v0.7.2
+> バージョン: v0.7.4
 
 ## クイックスタート
+
+インストール後、**初回セットアップ**を実行:
+
+```bash
+msh setup          # 対話式（config.toml + 任意で IDE MCP 連携）
+msh setup --yes --skip-integrations   # 非対話（config のみ）
+msh doctor         # 設定・agent ゲート・MCP の健全性チェック
+```
+
+`msh` を初めて対話起動すると、オンボーディングで `setup` / `doctor` も案内されます。
 
 ### GitHub Releases（推奨）
 
@@ -57,9 +67,10 @@ chsh -s /usr/local/bin/msh
 ## 設定
 
 ```bash
+msh setup    # ~/.config/msh/config.toml を生成（推奨）
+# 手動の場合:
 mkdir -p ~/.config/msh
-# テンプレートは msh 初回起動時のオンボーディング、または:
-# docs/compatibility.md の default_config_template を参照
+# テンプレートは msh setup 出力、または docs/compatibility.md の default_config_template
 ```
 
 ## 検証
@@ -68,7 +79,19 @@ mkdir -p ~/.config/msh
 ./scripts/check.sh              # 開発者向け
 ./scripts/compat-score.sh       # 互換スコア
 ./scripts/dotfiles-compat.sh    # dotfiles 回帰
+./scripts/verify-mcp.sh         # Cursor MCP smoke test
 ```
+
+## Cursor MCP（`msh --mcp`）
+
+プロジェクトに `.cursor/mcp.json` が同梱されています。初回は msh をビルドしてください。
+
+```bash
+cd msh && cargo build
+./scripts/verify-mcp.sh   # 緑なら Cursor Settings → MCP で msh を確認
+```
+
+詳細: [agent-shell-positioning.md](./agent-shell-positioning.md) §5.3 · [agent-integration.md](./agent-integration.md)（Cursor / Claude Code / Codex / OpenClaw 設定例）
 
 ## 関連
 

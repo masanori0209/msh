@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "msh": {
+      "command": "/usr/local/bin/msh",
+      "args": ["--mcp"],
+      "env": {
+        "MSH_SKIP_RC": "1",
+        "MSH_AGENT_BLOCK_CAUTION": "0"
+      }
+    }
+  }
+}

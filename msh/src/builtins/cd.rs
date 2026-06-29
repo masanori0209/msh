@@ -16,6 +16,12 @@ pub fn run(args: &[String]) -> Result<()> {
         return Err(MshError::DirNotFound(path.display().to_string()));
     }
 
+    if let Ok(sandbox) = env::var("MSH_AGENT_SANDBOX") {
+        if !sandbox.is_empty() {
+            crate::agent::enforce_cd_sandbox(&sandbox, path)?;
+        }
+    }
+
     env::set_current_dir(path)?;
     Ok(())
 }

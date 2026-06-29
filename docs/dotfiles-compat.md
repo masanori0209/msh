@@ -10,7 +10,7 @@
 | 必須パターン | 7 / 7 |
 | **必須通過率** | **100%** |
 | 推奨+必須 通過 | 11 / 11 |
-| bash 固有（許容不可） | 2 件スキップ |
+| bash 固有（許容不可） | 1 件スキップ |
 
 CI ゲート: 必須通過率 **≥ 85%**（現目標 100%）
 
@@ -29,5 +29,5 @@ CI ゲート: 必須通過率 **≥ 85%**（現目標 100%）
 | 推奨 | プレーン代入 | `EDITOR=vim; echo $EDITOR` | ✅ |
 | 推奨 | [[ 条件 | `[[ -n "x" ]] && echo nn` | ✅ |
 | 推奨 | 配列 | `ports=(80 443); echo ${ports[1]}` | ✅ |
-| 許容不可 | shopt | `shopt -s nullglob 2>/dev/null; echo shopt_ok` | ⏭ |
+| 許容不可 | shopt | `shopt -s nullglob 2>/dev/null; echo shopt_ok` | ❌ |
 | 許容不可 | プロセス置換 | `cat <(echo x) 2>/dev/null` | ⏭ |

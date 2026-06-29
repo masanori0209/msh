@@ -1,0 +1,15 @@
+{
+  "env": {
+    "MSH_SKIP_RC": "1",
+    "CLAUDE_CODE_SHELL": "/usr/local/bin/msh-agent-shell.sh"
+  },
+  "mcpServers": {
+    "msh": {
+      "command": "/usr/local/bin/msh",
+      "args": ["--mcp"],
+      "env": {
+        "MSH_SKIP_RC": "1"
+      }
+    }
+  }
+}

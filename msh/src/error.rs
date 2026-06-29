@@ -41,6 +41,35 @@ impl std::error::Error for MshError {
     }
 }
 
+impl MshError {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Io(_) => "io",
+            Self::DirNotFound(_) => "dir_not_found",
+            Self::InvalidExport(_) => "invalid_export",
+            Self::CommandNotFound(_) => "command_not_found",
+            Self::ParseError(_) => "parse_error",
+            Self::AliasError(_) => "alias_error",
+            Self::UnsupportedSyntax { .. } => "unsupported_syntax",
+            Self::ScriptError(_) => "script_error",
+        }
+    }
+
+    pub fn workaround(&self) -> Option<&str> {
+        match self {
+            Self::UnsupportedSyntax { workaround, .. } => Some(workaround),
+            _ => None,
+        }
+    }
+
+    pub fn suggestion(&self) -> Option<String> {
+        match self {
+            Self::CommandNotFound(cmd) => crate::hints::suggest_command(cmd).map(str::to_string),
+            _ => None,
+        }
+    }
+}
+
 impl From<std::io::Error> for MshError {
     fn from(value: std::io::Error) -> Self {
         Self::Io(value)

@@ -67,7 +67,7 @@ fn format_error_ja(err: &MshError) -> String {
     }
 }
 
-fn suggest_command(input: &str) -> Option<&'static str> {
+pub fn suggest_command(input: &str) -> Option<&'static str> {
     for (typo, suggestion) in TYPO_MAP {
         if input == *typo {
             return Some(suggestion);

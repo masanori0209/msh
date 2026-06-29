@@ -458,6 +458,13 @@ fn lex(input: &str) -> Result<Vec<Token>> {
                 chars.next();
                 tokens.push(Token::RedirectStdout(OpenMode::Append));
             }
+            '>' if chars.peek() == Some(&'(') => {
+                current.push('>');
+                current.push('(');
+                chars.next();
+                read_paren_body(&mut chars, &mut current, "process substitution")?;
+                flush_word(&mut tokens, &mut current, &mut word_quoted);
+            }
             '>' => {
                 flush_word(&mut tokens, &mut current, &mut word_quoted);
                 tokens.push(Token::RedirectStdout(OpenMode::Truncate));
@@ -469,6 +476,13 @@ fn lex(input: &str) -> Result<Vec<Token>> {
                     chars.next();
                 }
                 tokens.push(Token::RedirectHeredoc);
+            }
+            '<' if chars.peek() == Some(&'(') => {
+                current.push('<');
+                current.push('(');
+                chars.next();
+                read_paren_body(&mut chars, &mut current, "process substitution")?;
+                flush_word(&mut tokens, &mut current, &mut word_quoted);
             }
             '<' => {
                 flush_word(&mut tokens, &mut current, &mut word_quoted);
@@ -506,6 +520,14 @@ fn read_dollar_paren_body<I: Iterator<Item = char>>(
     chars: &mut std::iter::Peekable<I>,
     current: &mut String,
 ) -> Result<()> {
+    read_paren_body(chars, current, "command substitution")
+}
+
+fn read_paren_body<I: Iterator<Item = char>>(
+    chars: &mut std::iter::Peekable<I>,
+    current: &mut String,
+    label: &str,
+) -> Result<()> {
     let mut depth = 1;
     for ch in chars.by_ref() {
         current.push(ch);
@@ -520,7 +542,7 @@ fn read_dollar_paren_body<I: Iterator<Item = char>>(
             _ => {}
         }
     }
-    Err(MshError::ParseError("unclosed command substitution".into()))
+    Err(MshError::ParseError(format!("unclosed {label}")))
 }
 
 fn read_braced_param<I: Iterator<Item = char>>(
@@ -668,5 +690,15 @@ mod tests {
         let script = parse_script("echo hello | wc -c && echo done").unwrap();
         assert_eq!(script.segments.len(), 2);
         assert_eq!(script.segments[0].pipeline.pipeline.len(), 2);
+    }
+
+    #[test]
+    fn parse_process_substitution_as_word() {
+        let line = parse_line("cat <(echo proc)").unwrap();
+        let argv = &line.pipeline[0].argv;
+        assert_eq!(argv.len(), 2);
+        assert_eq!(argv[0].value, "cat");
+        assert_eq!(argv[1].value, "<(echo proc)");
+        assert!(line.pipeline[0].redirects.is_empty());
     }
 }

@@ -1,6 +1,6 @@
 # msh プラグイン API
 
-> バージョン: v0.7.0（Phase 6）
+> バージョン: v0.7.4（Phase 6）
 
 ## 概要
 
@@ -9,7 +9,7 @@ msh は 2 段階の拡張モデルを採用しています。
 | 段階 | 方式 | 状態 |
 |---|---|---|
 | **L1 スクリプトプラグイン** | `~/.config/msh/plugins/*.msh` | ✅ 利用可能 |
-| **L2 WASM プラグイン** | 動的モジュール + サンドボックス | 📋 設計中（v1.0 目標） |
+| **L2 WASM プラグイン** | `plugin.toml` + `.wasm` + 外部 `wasmtime` | ✅ PoC（v0.7.4） |
 
 ---
 
@@ -42,22 +42,40 @@ export MSH_PLUGIN_GIT=1
 
 ---
 
-## L2: WASM プラグイン（将来）
+## L2: WASM プラグイン（PoC）
 
-### 設計方針（草案）
+### 配置
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│  msh core   │────►│  plugin host │────►│ WASM module │
-│  (Rust)     │     │  (wit ABI)   │     │  (sandbox)  │
-└─────────────┘     └──────────────┘     └─────────────┘
+~/.config/msh/plugins/<name>/
+  plugin.toml    # マニフェスト
+  plugin.wasm    # または manifest の wasm = "..." で指定
 ```
 
-- **WIT インターフェース**: 補完候補、プロンプトセグメント、組み込みコマンド登録
-- **サンドボックス**: ファイルシステム・ネットワークは明示許可のみ
-- **配布**: `msh install <name>`（Phase 6 将来 — レジストリ未実装）
+`plugin.toml` 例:
 
-### 想定 API（未実装）
+```toml
+name = "hello"
+description = "sample WASM plugin"
+wasm = "hello.wasm"
+```
+
+サンプル WAT/WASM はリポジトリ `plugins/examples/hello/` を参照（`wat2wasm hello.wat -o hello.wasm`）。
+
+### 組み込みコマンド
+
+```bash
+plugin list                          # 検出済み WASM プラグイン一覧
+plugin run hello greet               # wasmtime run ... --invoke greet
+```
+
+### 設計方針
+
+- **ランタイム**: シェル本体に WASM エンジンを埋め込まず、**外部 `wasmtime`** に委譲（新規 crate 依存ゼロ）
+- **サンドボックス**: wasmtime の `--dir <plugin-dir>::` でプラグインディレクトリのみマウント
+- **将来**: WIT ABI（`on_complete` / `register_builtin` 等）は v1.0 で本番化予定
+
+### 想定 API（本番 ABI — 未確定）
 
 | フック | 用途 |
 |---|---|

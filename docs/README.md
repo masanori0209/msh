@@ -10,7 +10,10 @@ Rust 製シェル **msh** の設計・開発ドキュメント。
 | [roadmap.md](./roadmap.md) | フェーズ別開発ロードマップ |
 | [competitive-analysis.md](./competitive-analysis.md) | Bash / Zsh / Fish との比較 |
 | [compatibility.md](./compatibility.md) | Zsh 同等互換の方針・レベル定義 |
-| [benchmarks.md](./benchmarks.md) | 性能ベンチマーク結果 |
+| [ai-integration.md](./ai-integration.md) | AI 連携設計（Track A/B） |
+| [agent-shell-positioning.md](./agent-shell-positioning.md) | AI 用途シェルのカテゴリ整理・エージェント統合設計 |
+| [agent-integration.md](./agent-integration.md) | **Cursor / Claude Code / Codex / OpenClaw 設定例** |
+| [positioning-report.md](./positioning-report.md) | 競合ポジション・計測サマリー |
 
 ## クイックリファレンス
 

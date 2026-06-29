@@ -5,6 +5,7 @@ mod exit;
 mod export;
 mod help;
 mod history;
+mod plugin;
 mod pwd;
 pub mod source;
 pub mod stack;
@@ -19,7 +20,7 @@ pub enum BuiltinAction {
 
 pub const NAMES: &[&str] = &[
     "exit", "cd", "pwd", "echo", "export", "alias", "source", ".", "which", "help", "history",
-    "pushd", "popd", "dirs", "ai", "explain",
+    "pushd", "popd", "dirs", "ai", "explain", "prompt", "plugin",
 ];
 
 pub fn is_builtin(name: &str) -> bool {
@@ -40,6 +41,7 @@ pub fn needs_shell_context(name: &str) -> bool {
             | "dirs"
             | "ai"
             | "explain"
+            | "prompt"
     )
 }
 
@@ -74,6 +76,7 @@ pub fn run(name: &str, args: &[String]) -> Result<BuiltinAction> {
             history::run(args)?;
             Ok(BuiltinAction::Continue)
         }
+        "plugin" => Ok(BuiltinAction::Exit(plugin::run(args)?)),
         _ => unreachable!("unknown builtin: {name}"),
     }
 }

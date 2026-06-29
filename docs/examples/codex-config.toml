@@ -1,0 +1,24 @@
+# ~/.codex/config.toml の msh 連携例（抜粋）
+# 公式: https://developers.openai.com/codex/config-reference
+
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[shell_environment_policy]
+inherit = true
+set = { MSH_SKIP_RC = "1" }
+
+[mcp_servers.msh]
+command = "/usr/local/bin/msh"
+args = ["--mcp"]
+
+[mcp_servers.msh.env]
+MSH_SKIP_RC = "1"
+# MSH_AGENT_SANDBOX = "/path/to/your/project"
+# MSH_AGENT_AUDIT_LOG = "/Users/you/.local/state/msh-agent.jsonl"
+
+# プロジェクト限定（.codex/config.toml に置く場合は trust 済みプロジェクトのみ）
+# [profiles.agent]
+# model = "gpt-5.4"
+# sandbox_mode = "workspace-write"
+# approval_policy = "on-request"

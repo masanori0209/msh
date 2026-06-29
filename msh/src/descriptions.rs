@@ -17,6 +17,7 @@ pub fn builtin_description(name: &str) -> Option<&'static str> {
         "history" => Some("show or filter command history"),
         "ai" => Some("ask the configured AI model (prints, never executes)"),
         "explain" => Some("explain the previous or given command via AI"),
+        "prompt" => Some("configure or preview the interactive prompt"),
         _ => None,
     }
 }
